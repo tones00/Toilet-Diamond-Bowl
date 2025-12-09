@@ -69,6 +69,12 @@ const VALID_KEYS = [
     '2025BOWL',
 ];
 
+// Admin PIN - you can modify this
+const ADMIN_PIN = 'ADMIN2025';
+
+// Submission deadline: December 12, 2025 at 5:00 PM
+const SUBMISSION_DEADLINE = new Date('2025-12-12T17:00:00');
+
 // Application state
 let currentPlayer = '';
 let playerRatings = {};
@@ -77,20 +83,77 @@ let gameResults = {};
 let userProfiles = {}; // Store user profiles with keys
 let currentSession = null; // Track current logged in user
 let trashTalkMessages = []; // Store trash talk messages
+let adminSession = null; // Track admin login session
+let bannedIPs = []; // Store banned IP addresses
+let userIPs = {}; // Store IP addresses for each user
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     loadData();
+    checkIPBan();
     checkSession();
+    checkAdminSession();
+    getUserIP(); // Get and store current user's IP
     setupNavigation();
     setupSignUpPage();
     setupRatingPage();
     setupCFPBracket();
     setupTrashTalk();
     setupStandingsPage();
+    setupAdminLogin();
+    setupAdminPage();
     updateHomePage();
     updateNavigation();
 });
+
+// Get user's IP address
+async function getUserIP() {
+    try {
+        const response = await fetch('https://api.ipify.org?format=json');
+        const data = await response.json();
+        const userIP = data.ip;
+        
+        // Store IP for current user if logged in
+        if (currentSession && userProfiles[currentSession]) {
+            if (!userIPs[currentSession]) {
+                userIPs[currentSession] = [];
+            }
+            if (!userIPs[currentSession].includes(userIP)) {
+                userIPs[currentSession].push(userIP);
+                saveData();
+            }
+        }
+        
+        return userIP;
+    } catch (error) {
+        console.error('Error fetching IP:', error);
+        return null;
+    }
+}
+
+// Check if current IP is banned
+function checkIPBan() {
+    getUserIP().then(ip => {
+        if (ip && bannedIPs.includes(ip)) {
+            // Clear any session
+            currentSession = null;
+            adminSession = null;
+            localStorage.removeItem('toiletDiamondBowl_currentSession');
+            localStorage.removeItem('toiletDiamondBowl_adminSession');
+            
+            // Show ban message and prevent access
+            document.body.innerHTML = `
+                <div style="display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f5f5f5;">
+                    <div style="text-align: center; padding: 40px; background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                        <h1 style="color: #c41e3a; margin-bottom: 20px;">Access Denied</h1>
+                        <p style="font-size: 1.2em; color: #666; margin-bottom: 10px;">Your IP address has been banned from this site.</p>
+                        <p style="color: #999;">IP: ${ip}</p>
+                    </div>
+                </div>
+            `;
+        }
+    });
+}
 
 // Navigation
 function setupNavigation() {
@@ -109,13 +172,27 @@ function setupNavigation() {
 
 function showPage(pageName) {
     // Protect rate, cfp, and trashtalk pages - require login
-    if ((pageName === 'rate' || pageName === 'cfp' || pageName === 'trashtalk') && !currentSession) {
+    if ((pageName === 'rate' || pageName === 'point-submission' || pageName === 'cfp' || pageName === 'trashtalk') && !currentSession) {
         alert('Please sign up and login first.');
         showPage('signup');
         // Update nav to show signup as active
         document.querySelectorAll('.nav-link').forEach(link => {
             link.classList.remove('active');
             if (link.getAttribute('data-page') === 'signup') {
+                link.classList.add('active');
+            }
+        });
+        return;
+    }
+    
+    // Protect admin page - require admin login
+    if (pageName === 'admin' && !adminSession) {
+        alert('Please login as admin first.');
+        showPage('admin-login');
+        // Update nav to show admin-login as active
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.classList.remove('active');
+            if (link.getAttribute('data-page') === 'admin-login') {
                 link.classList.add('active');
             }
         });
@@ -129,7 +206,7 @@ function showPage(pageName) {
     if (targetPage) {
         targetPage.classList.add('active');
         
-        if (pageName === 'rate') {
+        if (pageName === 'rate' || pageName === 'point-submission') {
             renderRatingPage();
         } else if (pageName === 'cfp') {
             renderCFPBracket();
@@ -137,6 +214,8 @@ function showPage(pageName) {
             renderTrashTalk();
         } else if (pageName === 'signup') {
             renderSignUpPage();
+        } else if (pageName === 'admin') {
+            renderAdminPage();
         } else if (pageName === 'standings') {
             renderStandings();
         } else if (pageName === 'history') {
@@ -149,6 +228,9 @@ function updateNavigation() {
     const rateNavLink = document.getElementById('rate-nav-link');
     const cfpNavLink = document.getElementById('cfp-nav-link');
     const trashtalkNavLink = document.getElementById('trashtalk-nav-link');
+    const adminNavLink = document.getElementById('admin-nav-link');
+    const adminLoginNavLink = document.getElementById('admin-login-nav-link');
+    
     if (currentSession) {
         rateNavLink.style.display = 'inline-block';
         cfpNavLink.style.display = 'inline-block';
@@ -157,6 +239,14 @@ function updateNavigation() {
         rateNavLink.style.display = 'none';
         cfpNavLink.style.display = 'none';
         trashtalkNavLink.style.display = 'none';
+    }
+    
+    if (adminSession) {
+        adminNavLink.style.display = 'inline-block';
+        adminLoginNavLink.style.display = 'none';
+    } else {
+        adminNavLink.style.display = 'none';
+        adminLoginNavLink.style.display = 'inline-block';
     }
 }
 
@@ -233,16 +323,16 @@ function handleSignUp() {
     // Show login section for future logins
     document.getElementById('login-section').style.display = 'block';
     
-    // Redirect to rate page after 1.5 seconds
-    setTimeout(() => {
-        showPage('rate');
-        document.querySelectorAll('.nav-link').forEach(link => {
-            link.classList.remove('active');
-            if (link.getAttribute('data-page') === 'rate') {
-                link.classList.add('active');
-            }
-        });
-    }, 1500);
+        // Redirect to point submission page after 1.5 seconds
+        setTimeout(() => {
+            showPage('point-submission');
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('data-page') === 'point-submission') {
+                    link.classList.add('active');
+                }
+            });
+        }, 1500);
 }
 
 function handleLogin() {
@@ -261,26 +351,42 @@ function handleLogin() {
         return;
     }
     
-    // Set as current session
-    currentSession = name;
-    currentPlayer = name;
-    
-    saveData();
-    updateNavigation();
-    
-    messageDiv.textContent = 'Login successful! Redirecting to Rate Games...';
-    messageDiv.className = 'success';
-    
-    // Redirect to rate page after 1.5 seconds
-    setTimeout(() => {
-        showPage('rate');
-        document.querySelectorAll('.nav-link').forEach(link => {
-            link.classList.remove('active');
-            if (link.getAttribute('data-page') === 'rate') {
-                link.classList.add('active');
+    // Get and store IP
+    getUserIP().then(ip => {
+        // Update IP in profile
+        if (ip) {
+            if (!userIPs[name]) {
+                userIPs[name] = [];
             }
-        });
-    }, 1500);
+            if (!userIPs[name].includes(ip)) {
+                userIPs[name].push(ip);
+            }
+            if (userProfiles[name]) {
+                userProfiles[name].ip = ip;
+            }
+        }
+        
+        // Set as current session
+        currentSession = name;
+        currentPlayer = name;
+        
+        saveData();
+        updateNavigation();
+        
+        messageDiv.textContent = 'Login successful! Redirecting to Rate Games...';
+        messageDiv.className = 'success';
+        
+        // Redirect to rate page after 1.5 seconds
+        setTimeout(() => {
+            showPage('point-submission');
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('data-page') === 'point-submission') {
+                    link.classList.add('active');
+                }
+            });
+        }, 1500);
+    });
 }
 
 function checkSession() {
@@ -288,6 +394,13 @@ function checkSession() {
     if (savedSession && userProfiles[savedSession]) {
         currentSession = savedSession;
         currentPlayer = savedSession;
+    }
+}
+
+function checkAdminSession() {
+    const savedAdminSession = localStorage.getItem('toiletDiamondBowl_adminSession');
+    if (savedAdminSession === 'true') {
+        adminSession = true;
     }
 }
 
@@ -317,6 +430,19 @@ function handleLogout() {
 function renderRatingPage() {
     if (!currentSession || !currentPlayer) {
         document.getElementById('games-list').innerHTML = '<p>Please sign up and login first.</p>';
+        return;
+    }
+    
+    // Check deadline
+    const now = new Date();
+    if (now > SUBMISSION_DEADLINE) {
+        document.getElementById('ratings-container').innerHTML = `
+            <div class="deadline-message">
+                <h3>Submission Deadline Passed</h3>
+                <p>The deadline for submitting points was <strong>December 12, 2025 at 5:00 PM</strong>.</p>
+                <p>You can no longer submit or modify your picks.</p>
+            </div>
+        `;
         return;
     }
 
@@ -526,6 +652,13 @@ function saveRatings() {
         return;
     }
 
+    // Check deadline
+    const now = new Date();
+    if (now > SUBMISSION_DEADLINE) {
+        alert(`The submission deadline has passed. The deadline was December 12, 2025 at 5:00 PM.`);
+        return;
+    }
+
     if (!validateRatings()) {
         return;
     }
@@ -626,6 +759,19 @@ function setupCFPBracket() {
 function renderCFPBracket() {
     if (!currentSession || !currentPlayer) {
         document.getElementById('cfp-bracket-container').innerHTML = '<p>Please sign up and login first.</p>';
+        return;
+    }
+    
+    // Check deadline
+    const now = new Date();
+    if (now > SUBMISSION_DEADLINE) {
+        document.getElementById('cfp-bracket-container').innerHTML = `
+            <div class="deadline-message">
+                <h3>Submission Deadline Passed</h3>
+                <p>The deadline for submitting your CFP bracket was <strong>December 12, 2025 at 5:00 PM</strong>.</p>
+                <p>You can no longer submit or modify your bracket.</p>
+            </div>
+        `;
         return;
     }
 
@@ -782,6 +928,13 @@ function renderBracketRound(containerId, games, savedPicks, roundType) {
 function saveCFPBracket() {
     if (!currentSession || !currentPlayer) {
         alert('Please sign up and login first');
+        return;
+    }
+
+    // Check deadline
+    const now = new Date();
+    if (now > SUBMISSION_DEADLINE) {
+        alert(`The submission deadline has passed. The deadline was December 12, 2025 at 5:00 PM.`);
         return;
     }
 
@@ -1290,6 +1443,28 @@ function cancelReply() {
 // Standings Page
 function setupStandingsPage() {
     document.getElementById('season-select').addEventListener('change', renderStandings);
+    
+    // Tab switching
+    document.querySelectorAll('.standings-tab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const tabName = btn.getAttribute('data-tab');
+            
+            // Update tab buttons
+            document.querySelectorAll('.standings-tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            // Update tab content
+            document.querySelectorAll('.standings-tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`standings-${tabName}`).classList.add('active');
+            
+            // Render picks grid if that tab is selected
+            if (tabName === 'picks-grid') {
+                renderPicksGrid();
+            }
+        });
+    });
 }
 
 function renderStandings() {
@@ -1305,7 +1480,7 @@ function renderStandings() {
         
         bowlGames.forEach(game => {
             const rating = playerRatings[playerName][game.id];
-            if (rating && rating.points && game.completed && game.winner) {
+            if (rating && rating.points !== undefined && rating.points !== null && game.completed && game.winner) {
                 if (rating.winner === game.winner) {
                     bowlPoints += rating.points;
                     gamesCorrect++;
@@ -1360,6 +1535,84 @@ function renderStandings() {
     });
 }
 
+function renderPicksGrid() {
+    const container = document.getElementById('picks-grid-container');
+    container.innerHTML = '';
+    
+    // Get all players
+    const players = Object.keys(playerRatings).filter(p => playerRatings[p] && Object.keys(playerRatings[p]).length > 0);
+    
+    if (players.length === 0) {
+        container.innerHTML = '<p>No picks submitted yet.</p>';
+        return;
+    }
+    
+    // Create table
+    const table = document.createElement('table');
+    table.className = 'picks-grid-table';
+    
+    // Header row
+    const headerRow = document.createElement('tr');
+    headerRow.innerHTML = '<th>Game</th>';
+    players.forEach(player => {
+        const th = document.createElement('th');
+        th.textContent = player;
+        headerRow.appendChild(th);
+    });
+    table.appendChild(headerRow);
+    
+    // Data rows
+    bowlGames.forEach(game => {
+        const row = document.createElement('tr');
+        
+        // Game name cell
+        const gameCell = document.createElement('td');
+        gameCell.className = 'game-name-cell';
+        const team1Name = game.team1;
+        const team2Name = game.team2.split('(')[0].trim();
+        gameCell.innerHTML = `
+            <strong>${game.name}</strong><br>
+            <span class="game-teams">${team1Name} vs ${team2Name}</span>
+            ${game.completed && game.winner ? `<br><span class="game-winner">Winner: ${game.winner}</span>` : ''}
+        `;
+        row.appendChild(gameCell);
+        
+        // Player picks
+        players.forEach(player => {
+            const cell = document.createElement('td');
+            const rating = playerRatings[player][game.id];
+            
+            if (rating && rating.winner) {
+                if (!game.completed) {
+                    // Game not completed yet - show as gray
+                    cell.className = 'pending-pick';
+                    cell.innerHTML = `
+                        <div class="pick-winner">${rating.winner}</div>
+                        <div class="pick-points">${rating.points || 'N/A'} pts</div>
+                    `;
+                } else {
+                    // Game completed - show correct/incorrect
+                    const isCorrect = game.winner && rating.winner === game.winner;
+                    cell.className = isCorrect ? 'correct-pick' : 'incorrect-pick';
+                    cell.innerHTML = `
+                        <div class="pick-winner">${rating.winner}</div>
+                        <div class="pick-points">${rating.points || 'N/A'} pts</div>
+                    `;
+                }
+            } else {
+                cell.className = 'no-pick';
+                cell.textContent = 'No pick';
+            }
+            
+            row.appendChild(cell);
+        });
+        
+        table.appendChild(row);
+    });
+    
+    container.appendChild(table);
+}
+
 // History Page
 function renderHistory() {
     const historyList = document.getElementById('history-list');
@@ -1382,8 +1635,13 @@ function saveData() {
     localStorage.setItem('toiletDiamondBowl_cfpBracket', JSON.stringify(cfpBracket));
     localStorage.setItem('toiletDiamondBowl_userProfiles', JSON.stringify(userProfiles));
     localStorage.setItem('toiletDiamondBowl_trashTalkMessages', JSON.stringify(trashTalkMessages));
+    localStorage.setItem('toiletDiamondBowl_bannedIPs', JSON.stringify(bannedIPs));
+    localStorage.setItem('toiletDiamondBowl_userIPs', JSON.stringify(userIPs));
     if (currentSession) {
         localStorage.setItem('toiletDiamondBowl_currentSession', currentSession);
+    }
+    if (adminSession) {
+        localStorage.setItem('toiletDiamondBowl_adminSession', 'true');
     }
     updateHomePage();
 }
@@ -1396,6 +1654,8 @@ function loadData() {
     const savedCFP = localStorage.getItem('toiletDiamondBowl_cfpBracket');
     const savedProfiles = localStorage.getItem('toiletDiamondBowl_userProfiles');
     const savedTrashTalk = localStorage.getItem('toiletDiamondBowl_trashTalkMessages');
+    const savedBannedIPs = localStorage.getItem('toiletDiamondBowl_bannedIPs');
+    const savedUserIPs = localStorage.getItem('toiletDiamondBowl_userIPs');
     
     if (savedRatings) {
         playerRatings = JSON.parse(savedRatings);
@@ -1508,6 +1768,505 @@ function formatDate(dateString) {
         month: 'long', 
         day: 'numeric' 
     });
+}
+
+// Admin Login
+function setupAdminLogin() {
+    document.getElementById('submit-admin-login').addEventListener('click', handleAdminLogin);
+}
+
+function handleAdminLogin() {
+    const pinInput = document.getElementById('admin-pin');
+    const pin = pinInput.value.trim();
+    const messageDiv = document.getElementById('admin-login-message');
+    
+    if (!pin) {
+        messageDiv.textContent = 'Please enter the admin PIN.';
+        messageDiv.className = 'error';
+        return;
+    }
+    
+    if (pin !== ADMIN_PIN) {
+        messageDiv.textContent = 'Invalid admin PIN. Please try again.';
+        messageDiv.className = 'error';
+        pinInput.value = '';
+        return;
+    }
+    
+    // Set admin session
+    adminSession = true;
+    localStorage.setItem('toiletDiamondBowl_adminSession', 'true');
+    saveData();
+    
+    messageDiv.textContent = 'Admin login successful!';
+    messageDiv.className = 'success';
+    
+    updateNavigation();
+    
+    setTimeout(() => {
+        showPage('admin');
+        // Update nav to show admin as active
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.classList.remove('active');
+            if (link.getAttribute('data-page') === 'admin') {
+                link.classList.add('active');
+            }
+        });
+    }, 500);
+}
+
+function handleAdminLogout() {
+    adminSession = null;
+    localStorage.removeItem('toiletDiamondBowl_adminSession');
+    saveData();
+    updateNavigation();
+    showPage('home');
+    // Update nav to show home as active
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active');
+        if (link.getAttribute('data-page') === 'home') {
+            link.classList.add('active');
+        }
+    });
+}
+
+// Admin Page
+function setupAdminPage() {
+    document.getElementById('admin-logout-button').addEventListener('click', handleAdminLogout);
+    
+    // Tab switching
+    document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const tabName = btn.getAttribute('data-tab');
+            
+            // Update tab buttons
+            document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            // Update tab content
+            document.querySelectorAll('.admin-tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`admin-${tabName}`).classList.add('active');
+        });
+    });
+}
+
+function renderAdminPage() {
+    renderAdminBowlGames();
+    renderAdminCFPGames();
+    renderAdminUserManagement();
+}
+
+function renderAdminBowlGames() {
+    const container = document.getElementById('admin-bowl-games-list');
+    container.innerHTML = '';
+    
+    bowlGames.forEach(game => {
+        const gameDiv = document.createElement('div');
+        gameDiv.className = 'admin-game-item';
+        
+        const team1Name = game.team1;
+        const team2Name = game.team2.split('(')[0].trim();
+        
+        gameDiv.innerHTML = `
+            <div class="admin-game-info">
+                <h4>${game.name}</h4>
+                <p class="admin-game-teams">${team1Name} vs ${team2Name}</p>
+                <p class="admin-game-date">${formatDate(game.date)}</p>
+                <p class="admin-game-status ${game.completed ? 'completed' : 'pending'}">
+                    Status: ${game.completed ? `Completed - Winner: ${game.winner}${game.score ? ` (${game.score})` : ''}` : 'Pending'}
+                </p>
+            </div>
+            <div class="admin-game-controls">
+                <label>
+                    <input type="checkbox" class="admin-complete-checkbox" data-game-id="${game.id}" ${game.completed ? 'checked' : ''}>
+                    Mark as Complete
+                </label>
+                <select class="admin-winner-select" data-game-id="${game.id}" ${!game.completed ? 'disabled' : ''}>
+                    <option value="">Select Winner</option>
+                    <option value="${team1Name}" ${game.winner === team1Name ? 'selected' : ''}>${team1Name}</option>
+                    <option value="${team2Name}" ${game.winner === team2Name ? 'selected' : ''}>${team2Name}</option>
+                </select>
+                <div class="admin-score-inputs">
+                    <input type="number" class="admin-score-input" data-game-id="${game.id}" data-team="team1" 
+                           placeholder="${team1Name} Score" value="${game.team1Score || ''}" 
+                           min="0" ${!game.completed ? 'disabled' : ''}>
+                    <span class="score-separator">-</span>
+                    <input type="number" class="admin-score-input" data-game-id="${game.id}" data-team="team2" 
+                           placeholder="${team2Name} Score" value="${game.team2Score || ''}" 
+                           min="0" ${!game.completed ? 'disabled' : ''}>
+                </div>
+                <button class="btn-primary admin-save-game" data-game-id="${game.id}">Save Result</button>
+            </div>
+        `;
+        
+        // Enable/disable winner select and score inputs based on checkbox
+        const checkbox = gameDiv.querySelector('.admin-complete-checkbox');
+        const winnerSelect = gameDiv.querySelector('.admin-winner-select');
+        const scoreInputs = gameDiv.querySelectorAll('.admin-score-input');
+        
+        checkbox.addEventListener('change', (e) => {
+            const isChecked = e.target.checked;
+            winnerSelect.disabled = !isChecked;
+            scoreInputs.forEach(input => input.disabled = !isChecked);
+            if (!isChecked) {
+                winnerSelect.value = '';
+                scoreInputs.forEach(input => input.value = '');
+            }
+        });
+        
+        // Save button
+        const saveBtn = gameDiv.querySelector('.admin-save-game');
+        saveBtn.addEventListener('click', () => {
+            saveBowlGameResult(game.id);
+        });
+        
+        container.appendChild(gameDiv);
+    });
+}
+
+function saveBowlGameResult(gameId) {
+    const game = bowlGames.find(g => g.id === gameId);
+    if (!game) return;
+    
+    const checkbox = document.querySelector(`.admin-complete-checkbox[data-game-id="${gameId}"]`);
+    const winnerSelect = document.querySelector(`.admin-winner-select[data-game-id="${gameId}"]`);
+    const team1ScoreInput = document.querySelector(`.admin-score-input[data-game-id="${gameId}"][data-team="team1"]`);
+    const team2ScoreInput = document.querySelector(`.admin-score-input[data-game-id="${gameId}"][data-team="team2"]`);
+    
+    const isComplete = checkbox.checked;
+    const winner = winnerSelect.value.trim();
+    const team1Score = team1ScoreInput ? parseInt(team1ScoreInput.value) : null;
+    const team2Score = team2ScoreInput ? parseInt(team2ScoreInput.value) : null;
+    
+    if (isComplete && !winner) {
+        alert('Please select a winner before marking the game as complete.');
+        return;
+    }
+    
+    game.completed = isComplete;
+    game.winner = isComplete ? winner : null;
+    game.team1Score = isComplete && !isNaN(team1Score) ? team1Score : null;
+    game.team2Score = isComplete && !isNaN(team2Score) ? team2Score : null;
+    
+    // Format score string
+    if (isComplete && !isNaN(team1Score) && !isNaN(team2Score)) {
+        game.score = `${team1Score} - ${team2Score}`;
+    } else {
+        game.score = null;
+    }
+    
+    saveData();
+    renderStandings();
+    renderAdminBowlGames(); // Refresh to show updated status
+    
+    const scoreText = (game.score ? ` (${game.score})` : '');
+    alert(`Game result saved: ${game.name} - ${isComplete ? `Winner: ${winner}${scoreText}` : 'Marked as pending'}`);
+}
+
+function renderAdminCFPGames() {
+    const container = document.getElementById('admin-cfp-games-list');
+    container.innerHTML = '';
+    
+    const rounds = [
+        { name: 'First Round', key: 'firstRound', games: cfpBracket.firstRound },
+        { name: 'Quarterfinals', key: 'quarterfinals', games: cfpBracket.quarterfinals },
+        { name: 'Semifinals', key: 'semifinals', games: cfpBracket.semifinals },
+        { name: 'Championship', key: 'championship', games: cfpBracket.championship }
+    ];
+    
+    rounds.forEach(round => {
+        const roundDiv = document.createElement('div');
+        roundDiv.className = 'admin-cfp-round';
+        roundDiv.innerHTML = `<h4>${round.name}</h4>`;
+        
+        const gamesContainer = document.createElement('div');
+        gamesContainer.className = 'admin-cfp-games';
+        
+        round.games.forEach(game => {
+            const gameDiv = document.createElement('div');
+            gameDiv.className = 'admin-game-item';
+            
+            const team1Name = game.team1 === 'TBD' ? 'TBD' : game.team1;
+            const team2Name = game.team2 === 'TBD' || game.team2.startsWith('TBD') ? 'TBD' : game.team2.split('(')[0].trim();
+            
+            // Get all possible winners (including user predictions)
+            const possibleWinners = new Set();
+            if (team1Name !== 'TBD') possibleWinners.add(team1Name);
+            if (team2Name !== 'TBD') possibleWinners.add(team2Name);
+            
+            // Add user-predicted teams
+            Object.values(playerCFPBrackets).forEach(bracket => {
+                const pick = bracket[round.key]?.[game.id];
+                if (pick) {
+                    if (pick.team1) possibleWinners.add(pick.team1);
+                    if (pick.team2) possibleWinners.add(pick.team2);
+                    if (pick.winner) possibleWinners.add(pick.winner);
+                }
+            });
+            
+            const winnerOptions = Array.from(possibleWinners).sort();
+            
+            gameDiv.innerHTML = `
+                <div class="admin-game-info">
+                    <p class="admin-game-teams">${team1Name} vs ${team2Name}</p>
+                    <p class="admin-game-date">${formatDate(game.date)}</p>
+                    <p class="admin-game-status ${game.completed ? 'completed' : 'pending'}">
+                        Status: ${game.completed ? `Completed - Winner: ${game.winner}` : 'Pending'}
+                    </p>
+                </div>
+                <div class="admin-game-controls">
+                    <label>
+                        <input type="checkbox" class="admin-complete-checkbox" data-round="${round.key}" data-game-id="${game.id}" ${game.completed ? 'checked' : ''}>
+                        Mark as Complete
+                    </label>
+                    <input type="text" class="admin-winner-input" data-round="${round.key}" data-game-id="${game.id}" 
+                           placeholder="Enter winner" value="${game.winner || ''}" ${!game.completed ? 'disabled' : ''}>
+                    <button class="btn-primary admin-save-cfp-game" data-round="${round.key}" data-game-id="${game.id}">Save Result</button>
+                </div>
+            `;
+            
+            // Enable/disable winner input and score inputs based on checkbox
+            const checkbox = gameDiv.querySelector('.admin-complete-checkbox');
+            const winnerInput = gameDiv.querySelector('.admin-winner-input');
+            const scoreInputs = gameDiv.querySelectorAll('.admin-score-input');
+            
+            checkbox.addEventListener('change', (e) => {
+                const isChecked = e.target.checked;
+                winnerInput.disabled = !isChecked;
+                scoreInputs.forEach(input => input.disabled = !isChecked);
+                if (!isChecked) {
+                    winnerInput.value = '';
+                    scoreInputs.forEach(input => input.value = '');
+                }
+            });
+            
+            // Save button
+            const saveBtn = gameDiv.querySelector('.admin-save-cfp-game');
+            saveBtn.addEventListener('click', () => {
+                saveCFPGameResult(round.key, game.id);
+            });
+            
+            gamesContainer.appendChild(gameDiv);
+        });
+        
+        roundDiv.appendChild(gamesContainer);
+        container.appendChild(roundDiv);
+    });
+}
+
+function saveCFPGameResult(round, gameId) {
+    const game = cfpBracket[round]?.find(g => g.id === gameId);
+    if (!game) return;
+    
+    const checkbox = document.querySelector(`.admin-complete-checkbox[data-round="${round}"][data-game-id="${gameId}"]`);
+    const winnerInput = document.querySelector(`.admin-winner-input[data-round="${round}"][data-game-id="${gameId}"]`);
+    const team1ScoreInput = document.querySelector(`.admin-score-input[data-round="${round}"][data-game-id="${gameId}"][data-team="team1"]`);
+    const team2ScoreInput = document.querySelector(`.admin-score-input[data-round="${round}"][data-game-id="${gameId}"][data-team="team2"]`);
+    
+    const isComplete = checkbox.checked;
+    const winner = winnerInput.value.trim();
+    const team1Score = team1ScoreInput ? parseInt(team1ScoreInput.value) : null;
+    const team2Score = team2ScoreInput ? parseInt(team2ScoreInput.value) : null;
+    
+    if (isComplete && !winner) {
+        alert('Please enter a winner before marking the game as complete.');
+        return;
+    }
+    
+    game.completed = isComplete;
+    game.winner = isComplete ? winner : null;
+    game.team1Score = isComplete && !isNaN(team1Score) ? team1Score : null;
+    game.team2Score = isComplete && !isNaN(team2Score) ? team2Score : null;
+    
+    // Format score string
+    if (isComplete && !isNaN(team1Score) && !isNaN(team2Score)) {
+        game.score = `${team1Score} - ${team2Score}`;
+    } else {
+        game.score = null;
+    }
+    
+    saveData();
+    renderStandings();
+    renderAdminCFPGames(); // Refresh to show updated status
+    
+    const scoreText = (game.score ? ` (${game.score})` : '');
+    alert(`CFP ${round} game result saved: ${isComplete ? `Winner: ${winner}${scoreText}` : 'Marked as pending'}`);
+}
+
+// User Management
+function renderAdminUserManagement() {
+    renderAdminUsersList();
+    renderAdminBannedIPsList();
+}
+
+function renderAdminUsersList() {
+    const container = document.getElementById('admin-users-list');
+    container.innerHTML = '';
+    
+    const users = Object.keys(userProfiles);
+    
+    if (users.length === 0) {
+        container.innerHTML = '<p>No users found.</p>';
+        return;
+    }
+    
+    const usersList = document.createElement('div');
+    usersList.className = 'admin-users-table';
+    
+    users.forEach(userName => {
+        const profile = userProfiles[userName];
+        const userIP = userIPs[userName] || [];
+        const hasRatings = playerRatings[userName] && Object.keys(playerRatings[userName]).length > 0;
+        const hasCFP = playerCFPBrackets[userName] && Object.keys(playerCFPBrackets[userName]).length > 0;
+        const messageCount = trashTalkMessages.filter(m => m.author === userName).length;
+        
+        const userDiv = document.createElement('div');
+        userDiv.className = 'admin-user-item';
+        userDiv.innerHTML = `
+            <div class="admin-user-info">
+                <h4>${userName}</h4>
+                <p class="admin-user-details">
+                    <strong>IP Addresses:</strong> ${userIP.length > 0 ? userIP.join(', ') : 'None recorded'}<br>
+                    <strong>Created:</strong> ${new Date(profile.createdAt).toLocaleDateString()}<br>
+                    <strong>Has Ratings:</strong> ${hasRatings ? 'Yes' : 'No'}<br>
+                    <strong>Has CFP Bracket:</strong> ${hasCFP ? 'Yes' : 'No'}<br>
+                    <strong>Trash Talk Messages:</strong> ${messageCount}
+                </p>
+            </div>
+            <div class="admin-user-actions">
+                <button class="btn-danger admin-ban-user" data-username="${userName}">Ban IP</button>
+                <button class="btn-danger admin-delete-user" data-username="${userName}">Delete User</button>
+            </div>
+        `;
+        
+        // Ban user button
+        const banBtn = userDiv.querySelector('.admin-ban-user');
+        banBtn.addEventListener('click', () => {
+            banUserIPs(userName);
+        });
+        
+        // Delete user button
+        const deleteBtn = userDiv.querySelector('.admin-delete-user');
+        deleteBtn.addEventListener('click', () => {
+            deleteUser(userName);
+        });
+        
+        usersList.appendChild(userDiv);
+    });
+    
+    container.appendChild(usersList);
+}
+
+function renderAdminBannedIPsList() {
+    const container = document.getElementById('admin-banned-ips-list');
+    container.innerHTML = '';
+    
+    if (bannedIPs.length === 0) {
+        container.innerHTML = '<p>No IPs are currently banned.</p>';
+        return;
+    }
+    
+    const bannedList = document.createElement('div');
+    bannedList.className = 'admin-banned-ips-table';
+    
+    bannedIPs.forEach(ip => {
+        // Find users with this IP
+        const usersWithIP = Object.keys(userIPs).filter(user => userIPs[user].includes(ip));
+        
+        const ipDiv = document.createElement('div');
+        ipDiv.className = 'admin-banned-ip-item';
+        ipDiv.innerHTML = `
+            <div class="admin-ip-info">
+                <strong>${ip}</strong>
+                ${usersWithIP.length > 0 ? `<br><span style="color: #666; font-size: 0.9em;">Users: ${usersWithIP.join(', ')}</span>` : ''}
+            </div>
+            <div class="admin-ip-actions">
+                <button class="btn-secondary admin-unban-ip" data-ip="${ip}">Unban</button>
+            </div>
+        `;
+        
+        const unbanBtn = ipDiv.querySelector('.admin-unban-ip');
+        unbanBtn.addEventListener('click', () => {
+            unbanIP(ip);
+        });
+        
+        bannedList.appendChild(ipDiv);
+    });
+    
+    container.appendChild(bannedList);
+}
+
+function banUserIPs(userName) {
+    if (!confirm(`Are you sure you want to ban all IP addresses associated with user "${userName}"? This will prevent them from accessing the site.`)) {
+        return;
+    }
+    
+    const userIP = userIPs[userName] || [];
+    if (userIP.length === 0) {
+        alert('No IP addresses found for this user.');
+        return;
+    }
+    
+    userIP.forEach(ip => {
+        if (!bannedIPs.includes(ip)) {
+            bannedIPs.push(ip);
+        }
+    });
+    
+    saveData();
+    renderAdminUserManagement();
+    alert(`Banned ${userIP.length} IP address(es) for user "${userName}".`);
+}
+
+function unbanIP(ip) {
+    if (!confirm(`Are you sure you want to unban IP address "${ip}"?`)) {
+        return;
+    }
+    
+    const index = bannedIPs.indexOf(ip);
+    if (index > -1) {
+        bannedIPs.splice(index, 1);
+        saveData();
+        renderAdminUserManagement();
+        alert(`IP address "${ip}" has been unbanned.`);
+    }
+}
+
+function deleteUser(userName) {
+    if (!confirm(`Are you sure you want to delete user "${userName}"? This will permanently remove:\n- User profile\n- All ratings\n- CFP bracket\n- Trash talk messages\n\nThis action cannot be undone!`)) {
+        return;
+    }
+    
+    // Delete user profile
+    delete userProfiles[userName];
+    
+    // Delete ratings
+    delete playerRatings[userName];
+    
+    // Delete CFP bracket
+    delete playerCFPBrackets[userName];
+    
+    // Delete trash talk messages
+    trashTalkMessages = trashTalkMessages.filter(m => m.author !== userName);
+    
+    // Delete user IPs
+    delete userIPs[userName];
+    
+    // If this was the current session, log them out
+    if (currentSession === userName) {
+        currentSession = null;
+        currentPlayer = '';
+        localStorage.removeItem('toiletDiamondBowl_currentSession');
+    }
+    
+    saveData();
+    renderStandings();
+    renderAdminUserManagement();
+    renderTrashTalk(); // Refresh trash talk if on that page
+    
+    alert(`User "${userName}" has been deleted.`);
 }
 
 // Admin function to mark games as completed (for testing/demo)

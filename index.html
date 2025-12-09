@@ -16,18 +16,20 @@
         <nav class="main-nav">
             <a href="#" class="nav-link active" data-page="home">Home</a>
             <a href="#" class="nav-link" data-page="signup">Sign Up</a>
-            <a href="#" class="nav-link" data-page="rate" id="rate-nav-link" style="display: none;">Point Submission</a>
+            <a href="#" class="nav-link" data-page="point-submission" id="rate-nav-link" style="display: none;">Point Submission</a>
             <a href="#" class="nav-link" data-page="cfp" id="cfp-nav-link" style="display: none;">CFP Bracket</a>
             <a href="#" class="nav-link" data-page="trashtalk" id="trashtalk-nav-link" style="display: none;">Trash Talk</a>
             <a href="#" class="nav-link" data-page="standings">Standings</a>
             <a href="#" class="nav-link" data-page="history">History</a>
+            <a href="#" class="nav-link" data-page="admin-login" id="admin-login-nav-link">Admin Login</a>
+            <a href="#" class="nav-link" data-page="admin" id="admin-nav-link" style="display: none;">Admin Panel</a>
         </nav>
 
         <main id="main-content">
             <!-- Home Page -->
             <section id="home-page" class="page active">
                 <h2>Welcome to Toilet Diamond Bowl</h2>
-                <p>Rate each college football bowl game from 1 point to the total number of games. 
+                <p>Assign points to each college football bowl game from 1 point to the total number of games. 
                    The player with the highest total points wins!</p>
                 
                 <div class="info-box">
@@ -87,8 +89,8 @@
             </section>
 
             <!-- Rate Games Page -->
-            <section id="rate-page" class="page">
-                <h2>Rate Bowl Games</h2>
+            <section id="point-submission-page" class="page">
+                <h2>Point Submission</h2>
                 <div class="player-info">
                     <p>Logged in as: <strong id="current-player-name"></strong></p>
                     <button id="logout-button" class="btn-secondary">Logout</button>
@@ -114,22 +116,31 @@
                         <option value="current">Current Season</option>
                     </select>
                 </div>
-                <div id="standings-table-container">
-                    <table id="standings-table">
-                        <thead>
-                            <tr>
-                                <th>Rank</th>
-                                <th>Player</th>
-                                <th>Bowl Points</th>
-                                <th>CFP Points</th>
-                                <th>Total Points</th>
-                                <th>Bowl Correct</th>
-                                <th>CFP (1st/Qtr)</th>
-                            </tr>
-                        </thead>
-                        <tbody id="standings-body">
-                        </tbody>
-                    </table>
+                <div class="standings-tabs">
+                    <button class="standings-tab-btn active" data-tab="leaderboard">Leaderboard</button>
+                    <button class="standings-tab-btn" data-tab="picks-grid">Picks Grid</button>
+                </div>
+                <div id="standings-leaderboard" class="standings-tab-content active">
+                    <div id="standings-table-container">
+                        <table id="standings-table">
+                            <thead>
+                                <tr>
+                                    <th>Rank</th>
+                                    <th>Player</th>
+                                    <th>Bowl Points</th>
+                                    <th>CFP Points</th>
+                                    <th>Total Points</th>
+                                    <th>Bowl Correct</th>
+                                    <th>CFP (1st/Qtr)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="standings-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="standings-picks-grid" class="standings-tab-content">
+                    <div id="picks-grid-container"></div>
                 </div>
             </section>
 
@@ -219,6 +230,67 @@
                 <div class="history-content">
                     <p>Historical standings and results will be displayed here.</p>
                     <div id="history-list"></div>
+                </div>
+            </section>
+
+            <!-- Admin Login Page -->
+            <section id="admin-login-page" class="page">
+                <h2>Admin Login</h2>
+                <div class="signup-container">
+                    <div class="signup-form">
+                        <p class="instructions">Enter the admin PIN to access the admin panel for entering game results.</p>
+                        
+                        <div class="form-group">
+                            <label for="admin-pin">Admin PIN:</label>
+                            <input type="password" id="admin-pin" placeholder="Enter admin PIN" required>
+                        </div>
+                        
+                        <div id="admin-login-message"></div>
+                        
+                        <div class="button-group">
+                            <button id="submit-admin-login" class="btn-primary">Login as Admin</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Admin Panel Page -->
+            <section id="admin-page" class="page">
+                <h2>Admin Panel</h2>
+                <div class="player-info">
+                    <p>Logged in as: <strong>Administrator</strong></p>
+                    <button id="admin-logout-button" class="btn-secondary">Logout</button>
+                </div>
+
+                <div class="admin-tabs">
+                    <button class="admin-tab-btn active" data-tab="bowl-games">Bowl Games</button>
+                    <button class="admin-tab-btn" data-tab="cfp-games">CFP Games</button>
+                    <button class="admin-tab-btn" data-tab="user-management">User Management</button>
+                </div>
+
+                <!-- Bowl Games Admin -->
+                <div id="admin-bowl-games" class="admin-tab-content active">
+                    <h3>Enter Bowl Game Results</h3>
+                    <p class="instructions">Mark games as complete and enter the winning team.</p>
+                    <div id="admin-bowl-games-list"></div>
+                </div>
+
+                <!-- CFP Games Admin -->
+                <div id="admin-cfp-games" class="admin-tab-content">
+                    <h3>Enter CFP Game Results</h3>
+                    <p class="instructions">Mark CFP games as complete and enter the winning team.</p>
+                    <div id="admin-cfp-games-list"></div>
+                </div>
+
+                <!-- User Management Admin -->
+                <div id="admin-user-management" class="admin-tab-content">
+                    <h3>User Management</h3>
+                    <p class="instructions">Delete users or ban IP addresses. Banned IPs cannot access the site.</p>
+                    <div id="admin-users-list"></div>
+                    <div class="admin-banned-ips">
+                        <h4>Banned IP Addresses</h4>
+                        <div id="admin-banned-ips-list"></div>
+                    </div>
                 </div>
             </section>
         </main>
