@@ -92,10 +92,33 @@ let trashTalkMessages = []; // Store trash talk messages
 let adminSession = null; // Track admin login session
 let bannedIPs = []; // Store banned IP addresses
 let userIPs = {}; // Store IP addresses for each user
+let useBackend = false; // Flag to use backend API instead of localStorage
+
+// Check if backend is available
+async function checkBackendAvailable() {
+    try {
+        const response = await fetch('/api/users');
+        if (response.ok) {
+            useBackend = true;
+            if (window.API && window.API.initSocket) {
+                window.API.initSocket();
+            }
+            console.log('Backend API available - using server mode');
+            return true;
+        }
+    } catch (error) {
+        console.log('Backend not available - using localStorage mode');
+        useBackend = false;
+    }
+    return false;
+}
 
 // Initialize app
-document.addEventListener('DOMContentLoaded', () => {
-    loadData();
+document.addEventListener('DOMContentLoaded', async () => {
+    await checkBackendAvailable();
+    
+    await loadData();
+    
     checkIPBan();
     checkSession();
     checkAdminSession();
@@ -652,7 +675,7 @@ function validateRatings() {
     return true;
 }
 
-function saveRatings() {
+async function saveRatings() {
     if (!currentSession || !currentPlayer) {
         alert('Please sign up and login first');
         return;
@@ -733,16 +756,30 @@ function saveRatings() {
         }
     });
 
-    saveData();
-    
-    const messageDiv = document.getElementById('validation-message');
-    messageDiv.textContent = 'Ratings saved successfully!';
-    messageDiv.className = 'success';
-    
-    setTimeout(() => {
-        messageDiv.textContent = '';
-        messageDiv.className = '';
-    }, 3000);
+    // Save to API if backend is available
+    if (useBackend && window.API) {
+        try {
+            await window.API.ratings.save(currentPlayer, playerRatings[currentPlayer]);
+            const messageDiv = document.getElementById('validation-message');
+            messageDiv.textContent = 'Ratings saved successfully!';
+            messageDiv.className = 'success';
+            setTimeout(() => {
+                messageDiv.textContent = '';
+                messageDiv.className = '';
+            }, 3000);
+        } catch (error) {
+            alert('Error saving ratings: ' + error.message);
+        }
+    } else {
+        saveData();
+        const messageDiv = document.getElementById('validation-message');
+        messageDiv.textContent = 'Ratings saved successfully!';
+        messageDiv.className = 'success';
+        setTimeout(() => {
+            messageDiv.textContent = '';
+            messageDiv.className = '';
+        }, 3000);
+    }
 }
 
 function clearRatings() {
@@ -931,7 +968,7 @@ function renderBracketRound(containerId, games, savedPicks, roundType) {
     });
 }
 
-function saveCFPBracket() {
+async function saveCFPBracket() {
     if (!currentSession || !currentPlayer) {
         alert('Please sign up and login first');
         return;
@@ -1011,16 +1048,31 @@ function saveCFPBracket() {
     }
 
     playerCFPBrackets[currentPlayer] = bracket;
-    saveData();
-
-    const messageDiv = document.getElementById('cfp-validation-message');
-    messageDiv.textContent = 'CFP Bracket saved successfully!';
-    messageDiv.className = 'success';
-
-    setTimeout(() => {
-        messageDiv.textContent = '';
-        messageDiv.className = '';
-    }, 3000);
+    
+    // Save to API if backend is available
+    if (useBackend && window.API) {
+        try {
+            await window.API.cfpBracket.save(currentPlayer, bracket);
+            const messageDiv = document.getElementById('cfp-validation-message');
+            messageDiv.textContent = 'CFP Bracket saved successfully!';
+            messageDiv.className = 'success';
+            setTimeout(() => {
+                messageDiv.textContent = '';
+                messageDiv.className = '';
+            }, 3000);
+        } catch (error) {
+            alert('Error saving CFP bracket: ' + error.message);
+        }
+    } else {
+        saveData();
+        const messageDiv = document.getElementById('cfp-validation-message');
+        messageDiv.textContent = 'CFP Bracket saved successfully!';
+        messageDiv.className = 'success';
+        setTimeout(() => {
+            messageDiv.textContent = '';
+            messageDiv.className = '';
+        }, 3000);
+    }
 }
 
 function clearCFPBracket() {
@@ -1652,7 +1704,67 @@ function saveData() {
     updateHomePage();
 }
 
-function loadData() {
+async function loadData() {
+    // Load from API if backend is available
+    if (useBackend && window.API) {
+        try {
+            // Load users
+            const users = await window.API.user.getAll();
+            users.forEach(user => {
+                userProfiles[user.name] = user;
+            });
+            
+            // Load ratings
+            const allRatings = await window.API.ratings.getAll();
+            Object.assign(playerRatings, allRatings);
+            
+            // Load CFP brackets
+            const allBrackets = await window.API.cfpBracket.getAll();
+            Object.assign(playerCFPBrackets, allBrackets);
+            
+            // Load bowl games
+            const games = await window.API.games.getBowlGames();
+            games.forEach(game => {
+                const existingGame = bowlGames.find(g => g.id === game.id);
+                if (existingGame) {
+                    existingGame.completed = game.completed;
+                    existingGame.winner = game.winner;
+                    existingGame.team1Score = game.team1Score;
+                    existingGame.team2Score = game.team2Score;
+                    existingGame.score = game.score;
+                }
+            });
+            
+            // Load CFP games
+            const cfpGamesData = await window.API.games.getCFPGames();
+            Object.keys(cfpGamesData).forEach(round => {
+                cfpGamesData[round].forEach(game => {
+                    const existingGame = cfpBracket[round]?.find(g => g.id === game.id);
+                    if (existingGame) {
+                        existingGame.completed = game.completed;
+                        existingGame.winner = game.winner;
+                        existingGame.team1Score = game.team1Score;
+                        existingGame.team2Score = game.team2Score;
+                        existingGame.score = game.score;
+                    }
+                });
+            });
+            
+            // Load trash talk
+            const messages = await window.API.trashTalk.getAll();
+            trashTalkMessages = messages;
+            
+            // Load banned IPs
+            bannedIPs = await window.API.admin.getBannedIPs();
+            
+            console.log('Data loaded from API');
+            return; // Skip localStorage loading
+        } catch (error) {
+            console.error('Error loading from API, falling back to localStorage:', error);
+        }
+    }
+    
+    // Fall back to localStorage
     const savedRatings = localStorage.getItem('toiletDiamondBowl_playerRatings');
     const savedCFPBrackets = localStorage.getItem('toiletDiamondBowl_playerCFPBrackets');
     const savedResults = localStorage.getItem('toiletDiamondBowl_gameResults');
@@ -1735,6 +1847,62 @@ function loadData() {
         // Sort by timestamp
         flatMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
         trashTalkMessages = flatMessages;
+    }
+    
+    // Load data from API if backend is available
+    if (useBackend && window.API) {
+        try {
+            // Load users
+            const users = await window.API.user.getAll();
+            users.forEach(user => {
+                userProfiles[user.name] = user;
+            });
+            
+            // Load ratings
+            const allRatings = await window.API.ratings.getAll();
+            Object.assign(playerRatings, allRatings);
+            
+            // Load CFP brackets
+            const allBrackets = await window.API.cfpBracket.getAll();
+            Object.assign(playerCFPBrackets, allBrackets);
+            
+            // Load bowl games
+            const games = await window.API.games.getBowlGames();
+            games.forEach(game => {
+                const existingGame = bowlGames.find(g => g.id === game.id);
+                if (existingGame) {
+                    existingGame.completed = game.completed;
+                    existingGame.winner = game.winner;
+                    existingGame.team1Score = game.team1Score;
+                    existingGame.team2Score = game.team2Score;
+                    existingGame.score = game.score;
+                }
+            });
+            
+            // Load CFP games
+            const cfpGamesData = await window.API.games.getCFPGames();
+            Object.keys(cfpGamesData).forEach(round => {
+                cfpGamesData[round].forEach(game => {
+                    const existingGame = cfpBracket[round]?.find(g => g.id === game.id);
+                    if (existingGame) {
+                        existingGame.completed = game.completed;
+                        existingGame.winner = game.winner;
+                        existingGame.team1Score = game.team1Score;
+                        existingGame.team2Score = game.team2Score;
+                        existingGame.score = game.score;
+                    }
+                });
+            });
+            
+            // Load trash talk
+            const messages = await window.API.trashTalk.getAll();
+            trashTalkMessages = messages;
+            
+            // Load banned IPs
+            bannedIPs = await window.API.admin.getBannedIPs();
+        } catch (error) {
+            console.error('Error loading from API, using localStorage:', error);
+        }
     }
     
     if (savedCFP) {

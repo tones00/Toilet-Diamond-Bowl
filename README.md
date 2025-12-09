@@ -2,6 +2,32 @@
 
 A fantasy football website for college football bowl games where players assign point values to games and compete to see who can accumulate the most points.
 
+## 🚀 Backend Setup (For Cross-Location Play)
+
+**NEW**: The website now supports a backend server for cross-location multiplayer! Players in different locations can now see and interact with each other.
+
+### Quick Start
+
+1. **Install Dependencies**
+   ```bash
+   npm install
+   ```
+
+2. **Start the Server**
+   ```bash
+   npm start
+   ```
+
+3. **Access the Website**
+   - Local: http://localhost:3000
+   - Network: http://YOUR_IP_ADDRESS:3000
+
+4. **Share with Players**
+   - Share your IP address and port (default: 3000)
+   - Players can access from anywhere (same network or internet if deployed)
+
+See `BACKEND_SETUP.md` for detailed setup instructions and deployment options.
+
 ## Features
 
 ### 🏈 Regular Bowl Games
