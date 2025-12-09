@@ -2,6 +2,24 @@
 
 This guide will help you set up the backend server so players can interact across different locations.
 
+## 🌐 Custom Domain Setup
+
+**If you're hosting on a custom domain (e.g., toiletdiamondbowl.fun):**
+
+The website is already configured to work with your custom domain! The API client automatically detects your domain and uses it for all API calls. No additional configuration needed.
+
+**Important Notes:**
+- Your hosting service should automatically set the `PORT` environment variable
+- The server will listen on the port provided by your hosting service
+- Socket.io is configured to work with your domain
+- All API endpoints will be available at `https://toiletdiamondbowl.fun/api/*`
+
+## Local Development vs Production
+
+The server automatically detects if it's running in production mode:
+- **Production**: Uses your custom domain for CORS
+- **Development**: Allows all origins (for local testing)
+
 ## Prerequisites
 
 - Node.js (version 14 or higher)
@@ -61,10 +79,17 @@ All data operations go through REST API endpoints:
 
 ### Option 2: Cloud Hosting (Recommended for cross-location)
 Popular options:
-- **Heroku**: Free tier available
+- **Heroku**: Free tier available (add Procfile to root)
 - **Railway**: Easy deployment
 - **Render**: Free tier available
 - **DigitalOcean**: $5/month droplet
+- **Custom Domain**: Already configured for toiletdiamondbowl.fun
+
+**For Custom Domain Hosting:**
+1. Deploy your code to your hosting service
+2. Point your domain (toiletdiamondbowl.fun) to your hosting service
+3. The server will automatically detect production mode
+4. No additional configuration needed!
 
 ### Option 3: VPS/Server
 - Deploy to any VPS provider

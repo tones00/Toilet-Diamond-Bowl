@@ -10,15 +10,23 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
     cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
+        origin: process.env.NODE_ENV === 'production' 
+            ? ["https://toiletdiamondbowl.fun", "http://toiletdiamondbowl.fun"]
+            : "*",
+        methods: ["GET", "POST"],
+        credentials: true
     }
 });
 
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: process.env.NODE_ENV === 'production' 
+        ? ["https://toiletdiamondbowl.fun", "http://toiletdiamondbowl.fun"]
+        : "*",
+    credentials: true
+}));
 app.use(bodyParser.json());
 app.use(express.static(__dirname));
 
@@ -278,8 +286,13 @@ io.on('connection', (socket) => {
     });
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-    console.log(`Accessible from network at http://YOUR_IP:${PORT}`);
+server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    if (process.env.NODE_ENV === 'production') {
+        console.log(`Production server accessible at your domain`);
+    } else {
+        console.log(`Local server: http://localhost:${PORT}`);
+        console.log(`Network access: http://YOUR_IP:${PORT}`);
+    }
 });
 
