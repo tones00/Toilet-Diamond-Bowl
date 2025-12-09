@@ -66,7 +66,7 @@ const bowlGames = [
 
 // Valid access keys - you can modify these or add more
 const VALID_KEYS = [
-    'RETURN OF THE BOWL2025',
+    '2025BOWL',
 ];
 
 // Application state
