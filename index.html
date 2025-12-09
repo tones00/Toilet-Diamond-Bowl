@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toilet Diamond Bowl - College Football Bowl Game Fantasy</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Toilet Diamond Bowl</h1>
+            <p class="subtitle">College Football Bowl Game Fantasy</p>
+        </header>
+
+        <nav class="main-nav">
+            <a href="#" class="nav-link active" data-page="home">Home</a>
+            <a href="#" class="nav-link" data-page="signup">Sign Up</a>
+            <a href="#" class="nav-link" data-page="rate" id="rate-nav-link" style="display: none;">Point Submission</a>
+            <a href="#" class="nav-link" data-page="cfp" id="cfp-nav-link" style="display: none;">CFP Bracket</a>
+            <a href="#" class="nav-link" data-page="trashtalk" id="trashtalk-nav-link" style="display: none;">Trash Talk</a>
+            <a href="#" class="nav-link" data-page="standings">Standings</a>
+            <a href="#" class="nav-link" data-page="history">History</a>
+        </nav>
+
+        <main id="main-content">
+            <!-- Home Page -->
+            <section id="home-page" class="page active">
+                <h2>Welcome to Toilet Diamond Bowl</h2>
+                <p>Rate each college football bowl game from 1 point to the total number of games. 
+                   The player with the highest total points wins!</p>
+                
+                <div class="info-box">
+                    <h3>How It Works</h3>
+                    <ol>
+                        <li>Sign up with a valid access key to create your profile</li>
+                        <li>Go to "Point Submission" to assign points to each bowl game</li>
+                        <li>Assign points from 1 (least valuable) to N (most valuable), where N is the total number of games</li>
+                        <li>Each point value can only be used once</li>
+                        <li>After games are played, your score is the sum of points you assigned to winning teams</li>
+                        <li>Go to "CFP Bracket" to pick the winners of the College Football Playoff</li>
+                        <li>Check "Standings" to see how you rank</li>
+                    </ol>
+                </div>
+
+                <div class="stats-box">
+                    <h3>Current Season</h3>
+                    <p><strong>Total Games:</strong> <span id="total-games-count">0</span></p>
+                    <p><strong>Games Played:</strong> <span id="games-played-count">0</span></p>
+                    <p><strong>Active Players:</strong> <span id="active-players-count">0</span></p>
+                </div>
+            </section>
+
+            <!-- Sign Up Page -->
+            <section id="signup-page" class="page">
+                <h2>Sign Up</h2>
+                <div class="signup-container">
+                    <div class="signup-form">
+                        <p class="instructions">Create your profile to participate in Toilet Diamond Bowl. You'll need a valid access key to sign up.</p>
+                        
+                        <div class="form-group">
+                            <label for="signup-name">Your Name:</label>
+                            <input type="text" id="signup-name" placeholder="Enter your name" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="signup-key">Access Key:</label>
+                            <input type="text" id="signup-key" placeholder="Enter your access key" required>
+                        </div>
+                        
+                        <div id="signup-message"></div>
+                        
+                        <div class="button-group">
+                            <button id="submit-signup" class="btn-primary">Create Profile</button>
+                        </div>
+                    </div>
+                    
+                    <div id="login-section" style="display: none;">
+                        <h3>Already have a profile?</h3>
+                        <div class="form-group">
+                            <label for="login-name">Your Name:</label>
+                            <input type="text" id="login-name" placeholder="Enter your name">
+                        </div>
+                        <button id="login-button" class="btn-primary">Login</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Rate Games Page -->
+            <section id="rate-page" class="page">
+                <h2>Rate Bowl Games</h2>
+                <div class="player-info">
+                    <p>Logged in as: <strong id="current-player-name"></strong></p>
+                    <button id="logout-button" class="btn-secondary">Logout</button>
+                </div>
+
+                <div id="ratings-container">
+                    <p class="instructions">Assign points to each game. Each point value (1 to <span id="max-points">0</span>) can only be used once.</p>
+                    <div id="games-list"></div>
+                    <div class="button-group">
+                        <button id="save-ratings" class="btn-primary">Save Ratings</button>
+                        <button id="clear-ratings" class="btn-secondary">Clear All</button>
+                    </div>
+                    <div id="validation-message"></div>
+                </div>
+            </section>
+
+            <!-- Standings Page -->
+            <section id="standings-page" class="page">
+                <h2>Standings</h2>
+                <div class="standings-controls">
+                    <label for="season-select">Season:</label>
+                    <select id="season-select">
+                        <option value="current">Current Season</option>
+                    </select>
+                </div>
+                <div id="standings-table-container">
+                    <table id="standings-table">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Player</th>
+                                <th>Bowl Points</th>
+                                <th>CFP Points</th>
+                                <th>Total Points</th>
+                                <th>Bowl Correct</th>
+                                <th>CFP (1st/Qtr)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="standings-body">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- CFP Bracket Page -->
+            <section id="cfp-page" class="page">
+                <h2>College Football Playoff Bracket</h2>
+                <div class="player-info">
+                    <p>Logged in as: <strong id="cfp-current-player-name"></strong></p>
+                    <button id="cfp-logout-button" class="btn-secondary">Logout</button>
+                </div>
+                
+                <div class="cfp-info-box">
+                    <h3>Scoring System</h3>
+                    <ul>
+                        <li><strong>First Round:</strong> 5 points per correct pick</li>
+                        <li><strong>Quarterfinals:</strong> 10 points per correct pick</li>
+                        <li><strong>Semifinals:</strong> 15 points per correct pick</li>
+                        <li><strong>Championship:</strong> 20 points per correct pick</li>
+                        <li><strong>Perfect Bracket Bonus:</strong> 30 additional points if you get every pick correct!</li>
+                    </ul>
+                </div>
+
+                <div id="cfp-bracket-container">
+                    <div class="bracket-section">
+                        <h3>First Round (5 pts each)</h3>
+                        <div id="first-round-games"></div>
+                    </div>
+                    <div class="bracket-section">
+                        <h3>Quarterfinals (10 pts each)</h3>
+                        <div id="quarterfinal-games"></div>
+                    </div>
+                    <div class="bracket-section">
+                        <h3>Semifinals (15 pts each)</h3>
+                        <div id="semifinal-games"></div>
+                    </div>
+                    <div class="bracket-section">
+                        <h3>Championship (20 pts)</h3>
+                        <div id="championship-games"></div>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button id="save-cfp-bracket" class="btn-primary">Save Bracket</button>
+                    <button id="clear-cfp-bracket" class="btn-secondary">Clear All</button>
+                </div>
+                <div id="cfp-validation-message"></div>
+            </section>
+
+            <!-- Trash Talk Page -->
+            <section id="trashtalk-page" class="page">
+                <h2>Trash Talk</h2>
+                <div class="player-info">
+                    <p>Logged in as: <strong id="trashtalk-current-player-name"></strong></p>
+                    <div class="username-color-picker">
+                        <label for="username-color">Username Color:</label>
+                        <input type="color" id="username-color" value="#333">
+                        <button id="save-username-color" class="btn-secondary">Save Color</button>
+                    </div>
+                    <button id="trashtalk-logout-button" class="btn-secondary">Logout</button>
+                </div>
+                
+                <div class="trash-talk-window">
+                    <div class="trash-talk-container">
+                        <div class="trash-talk-messages" id="trash-talk-messages">
+                            <!-- Messages will be displayed here -->
+                        </div>
+                        
+                        <div id="reply-indicator" class="reply-indicator" style="display: none;">
+                            <span></span>
+                            <button id="cancel-reply" class="cancel-reply-btn">×</button>
+                        </div>
+                        
+                        <div class="trash-talk-input-area">
+                            <div class="message-input-group">
+                                <textarea id="trash-talk-input" placeholder="Type your message here... (links will be clickable)" rows="3"></textarea>
+                                <button id="send-trash-talk" class="btn-primary">Send</button>
+                            </div>
+                            <p class="input-hint">Press Enter to send, Shift+Enter for new line. Links will be automatically clickable.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- History Page -->
+            <section id="history-page" class="page">
+                <h2>History</h2>
+                <div class="history-content">
+                    <p>Historical standings and results will be displayed here.</p>
+                    <div id="history-list"></div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 Toilet Diamond Bowl</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
